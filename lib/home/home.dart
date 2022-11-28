@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -28,12 +29,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final usersCol = db.collection('users');
 
     usersCol.doc(uid).collection('chats').snapshots().listen((event) async {
-      for (var change in event.docChanges) {
-        final user = await usersCol.doc(change.doc.id).get();
+      chats.clear();
+      for (var doc in event.docs) {
+        final user = await usersCol.doc(doc.id).get();
         chats.add({
-          'id': change.doc.id,
+          'id': doc.id,
           'name': user.data()?['name'] ?? 'Null',
-          'lastMessage': change.doc.data()?['lastMessage'] ?? ''
+          'picture': await FirebaseStorage.instance.ref('users').child(doc.id).getDownloadURL(),
+          'lastMessage': doc.data()['lastMessage']
         });
       }
       loading.value = false;
@@ -73,9 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
             final lastMessage = chat['lastMessage'];
 
             return ListTile(
+              leading: CircleAvatar(
+                backgroundImage: NetworkImage(chat['picture']),
+              ),
               onTap: () => Get.to(ConversationScreen(user: chat)),
               title: Text(chat['name']),
-              subtitle: Text(lastMessage),
+              subtitle: Text(lastMessage['message']),
+              trailing: Text(lastMessage['date'].toDate().toString()),
             );
           },
         );

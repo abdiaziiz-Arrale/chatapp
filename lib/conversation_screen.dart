@@ -17,8 +17,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   final controller = TextEditingController();
 
-  void sendMessage() async {
-    final message = controller.text;
+  Future<void> deleteForMe(message) async {
+    final messageId = message['id'];
 
     final senderUid = FirebaseAuth.instance.currentUser!.uid;
     final receiverUid = widget.user['id'];
@@ -26,20 +26,62 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final db = FirebaseFirestore.instance;
     final usersCol = db.collection('users');
 
+    final senderChatsCol = usersCol.doc(senderUid).collection('chats');
+    final senderMessageDoc = senderChatsCol.doc(receiverUid);
+
+    final messagesCol = senderMessageDoc.collection('messages');
+    await messagesCol
+        .doc(messageId)
+        .update({'message': 'This message was deleted'});
+  }
+
+  void deleteForAll(message) async {
+    await deleteForMe(message);
+
+    final messageId = message['id'];
+
+    final senderUid = FirebaseAuth.instance.currentUser!.uid;
+    final receiverUid = widget.user['id'];
+
+    final db = FirebaseFirestore.instance;
+    final usersCol = db.collection('users');
+
+    final receiverChatsCol = usersCol.doc(receiverUid).collection('chats');
+    final receiverMessageDoc = receiverChatsCol.doc(senderUid);
+
+    final messagesCol = receiverMessageDoc.collection('messages');
+    await messagesCol
+        .doc(messageId)
+        .update({'message': 'This message was deleted'});
+  }
+
+
+  void sendMessage() async {
+    final senderUid = FirebaseAuth.instance.currentUser!.uid;
+    final receiverUid = widget.user['id'];
+
+    final db = FirebaseFirestore.instance;
+    final usersCol = db.collection('users');
+
+    final messageId = usersCol.doc().id;
+    final message = {
+      'message': controller.text,
+      'sender': senderUid,
+      'date': FieldValue.serverTimestamp(),
+    };
+
+
     // Sender chat
     final senderChatsCol = usersCol.doc(senderUid).collection('chats');
     final senderMessageDoc = senderChatsCol.doc(receiverUid);
     await senderMessageDoc.set({'lastMessage': message});
-    await senderMessageDoc
-        .collection('messages')
-        .add({'message': message, 'sender': senderUid});
+    await senderMessageDoc.collection('messages').doc(messageId).set(message);
+
     // Receiver chat
     final receiverChatsCol = usersCol.doc(receiverUid).collection('chats');
     final receiverMessageDoc = receiverChatsCol.doc(senderUid);
     await receiverMessageDoc.set({'lastMessage': message});
-    await receiverMessageDoc
-        .collection('messages')
-        .add({'message': message, 'sender': senderUid});
+    await receiverMessageDoc.collection('messages').doc(messageId).set(message);
   }
 
   @override
@@ -56,10 +98,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         .collection('chats')
         .doc(receiver)
         .collection('messages')
+        .orderBy('date')
         .snapshots()
         .listen((event) {
-      for (final changes in event.docChanges) {
-        messages.insert(0, changes.doc.data());
+      messages.clear();
+      for (final doc in event.docs) {
+        final message = {'id': doc.id, ...doc.data()};
+        messages.insert(0, message);
       }
     });
   }
@@ -67,6 +112,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[200],
       appBar: AppBar(
           title: Row(
         children: [Text(widget.user['name'])],
@@ -81,18 +127,48 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 itemBuilder: (ctx, index) {
                   final message = messages[index];
                   return Column(
-                    crossAxisAlignment: message['sender'] == FirebaseAuth.instance.currentUser!.uid ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    crossAxisAlignment: message['sender'] ==
+                            FirebaseAuth.instance.currentUser!.uid
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        margin:
-                            EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Text(
-                          message['message'],
-                          style: TextStyle(fontSize: 16, color: Colors.white),
+                      PopupMenuButton(
+                        onSelected: (val) {
+                          if (val == 0) {
+                            deleteForMe(message);
+                          } else {
+                            deleteForAll(message);
+                          }
+                        },
+                        itemBuilder: (ctx) {
+                          return [
+                            const PopupMenuItem(
+                                child: Text('Delete for me'), value: 0),
+                            if (message['sender'] ==
+                                FirebaseAuth.instance.currentUser!.uid)
+                              const PopupMenuItem(
+                                  child: Text('Delete for everyone'), value: 1),
+                          ];
+                        },
+                        child: Container(
+                          margin: EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                              color: message['sender'] ==
+                                      FirebaseAuth.instance.currentUser!.uid
+                                  ? Colors.blue
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Text(
+                            message['message'],
+                            style: TextStyle(
+                                fontSize: 16,
+                                color: message['sender'] ==
+                                        FirebaseAuth.instance.currentUser!.uid
+                                    ? Colors.white
+                                    : Colors.black),
+                          ),
                         ),
                       ),
                     ],
@@ -101,8 +177,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
               );
             }),
           ),
-          Padding(
-            padding: const EdgeInsets.all(24),
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
