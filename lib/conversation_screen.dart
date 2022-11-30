@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class ConversationScreen extends StatefulWidget {
+class ConversationScreen extends StatefulWidget  {
   const ConversationScreen({Key? key, required this.user}) : super(key: key);
 
   final Map user;
@@ -12,8 +14,10 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends State<ConversationScreen> {
+class _ConversationScreenState extends State<ConversationScreen> with WidgetsBindingObserver {
   final messages = [].obs;
+  final typing = false.obs;
+  final online = false.obs;
 
   final controller = TextEditingController();
 
@@ -55,7 +59,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
         .update({'message': 'This message was deleted'});
   }
 
-
   void sendMessage() async {
     final senderUid = FirebaseAuth.instance.currentUser!.uid;
     final receiverUid = widget.user['id'];
@@ -70,7 +73,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
       'date': FieldValue.serverTimestamp(),
     };
 
-
     // Sender chat
     final senderChatsCol = usersCol.doc(senderUid).collection('chats');
     final senderMessageDoc = senderChatsCol.doc(receiverUid);
@@ -84,9 +86,55 @@ class _ConversationScreenState extends State<ConversationScreen> {
     await receiverMessageDoc.collection('messages').doc(messageId).set(message);
   }
 
+  void updateTyping() async {
+
+    final sender = FirebaseAuth.instance.currentUser!.uid;
+    final String receiver = widget.user['id'];
+
+    final db = FirebaseFirestore.instance;
+    final usersCol = db.collection('users');
+
+    usersCol
+        .doc(receiver)
+        .collection('chats')
+        .doc(sender)
+    .set({'typing': true}, SetOptions(merge: true));
+
+    Timer(const Duration(seconds: 2), () {
+      usersCol
+          .doc(receiver)
+          .collection('chats')
+          .doc(sender)
+          .set({'typing': false}, SetOptions(merge: true));
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    final sender = FirebaseAuth.instance.currentUser!.uid;
+    final String receiver = widget.user['id'];
+
+    final db = FirebaseFirestore.instance;
+    final usersCol = db.collection('users');
+
+    if (state == AppLifecycleState.resumed) {
+      usersCol.doc(sender)
+          .set({'online': true}, SetOptions(merge: true));
+
+    } else {
+      usersCol.doc(sender)
+          .set({'online': false}, SetOptions(merge: true));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
     final sender = FirebaseAuth.instance.currentUser!.uid;
     final String receiver = widget.user['id'];
 
@@ -107,6 +155,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
         messages.insert(0, message);
       }
     });
+
+    usersCol
+        .doc(sender)
+        .collection('chats')
+        .doc(receiver)
+        .snapshots()
+        .listen((event) {
+      typing.value = event.data()?['typing'] == true;
+    });
+
+    usersCol
+        .doc(receiver)
+        .snapshots()
+        .listen((event) {
+      online.value = event.data()?['online'] == true;
+    });
   }
 
   @override
@@ -115,7 +179,36 @@ class _ConversationScreenState extends State<ConversationScreen> {
       backgroundColor: Colors.grey[200],
       appBar: AppBar(
           title: Row(
-        children: [Text(widget.user['name'])],
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundImage: NetworkImage(widget.user['picture']),
+          ),
+          SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.user['name']),
+              Obx(() {
+                if (typing.isTrue) {
+                  return Text(
+                    'Typing...',
+                    style:
+                        TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+                  );
+                } else {
+                  return Obx(() {
+                    return Text(
+                      online.value ? 'Online' : 'Offline',
+                      style:
+                      TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+                    );
+                  });
+                }
+              })
+            ],
+          )
+        ],
       )),
       body: Column(
         children: [
@@ -186,6 +279,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 Expanded(
                   child: TextField(
                     controller: controller,
+                    onChanged: (val) {
+                      updateTyping();
+                    },
                     decoration: InputDecoration(hintText: 'Enter messages'),
                   ),
                 ),
