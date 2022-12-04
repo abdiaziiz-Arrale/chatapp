@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:timer/find_screen.dart';
 
-class ConversationScreen extends StatefulWidget  {
+class ConversationScreen extends StatefulWidget {
   const ConversationScreen({Key? key, required this.user}) : super(key: key);
 
   final Map user;
@@ -14,10 +18,13 @@ class ConversationScreen extends StatefulWidget  {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends State<ConversationScreen> with WidgetsBindingObserver {
+class _ConversationScreenState extends State<ConversationScreen>
+    with WidgetsBindingObserver {
   final messages = [].obs;
   final typing = false.obs;
   final online = false.obs;
+
+  final image = Rx<XFile?>(null);
 
   final controller = TextEditingController();
 
@@ -59,7 +66,11 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
         .update({'message': 'This message was deleted'});
   }
 
-  void sendMessage() async {
+  void sendMessage(XFile? file, String text) async {
+
+    controller.clear();
+    image.value = null;
+
     final senderUid = FirebaseAuth.instance.currentUser!.uid;
     final receiverUid = widget.user['id'];
 
@@ -68,10 +79,20 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
 
     final messageId = usersCol.doc().id;
     final message = {
-      'message': controller.text,
+      'message': text,
       'sender': senderUid,
       'date': FieldValue.serverTimestamp(),
     };
+
+    if (file != null) {
+      final storage = FirebaseStorage.instance;
+      final imageRef = storage.ref('chatImages').child(messageId);
+
+      await imageRef.putFile(File(file.path));
+
+      final imageUrl = await imageRef.getDownloadURL();
+      message['image'] = imageUrl;
+    }
 
     // Sender chat
     final senderChatsCol = usersCol.doc(senderUid).collection('chats');
@@ -87,7 +108,6 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
   }
 
   void updateTyping() async {
-
     final sender = FirebaseAuth.instance.currentUser!.uid;
     final String receiver = widget.user['id'];
 
@@ -98,7 +118,7 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
         .doc(receiver)
         .collection('chats')
         .doc(sender)
-    .set({'typing': true}, SetOptions(merge: true));
+        .set({'typing': true}, SetOptions(merge: true));
 
     Timer(const Duration(seconds: 2), () {
       usersCol
@@ -120,12 +140,9 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
     final usersCol = db.collection('users');
 
     if (state == AppLifecycleState.resumed) {
-      usersCol.doc(sender)
-          .set({'online': true}, SetOptions(merge: true));
-
+      usersCol.doc(sender).set({'online': true}, SetOptions(merge: true));
     } else {
-      usersCol.doc(sender)
-          .set({'online': false}, SetOptions(merge: true));
+      usersCol.doc(sender).set({'online': false}, SetOptions(merge: true));
     }
   }
 
@@ -165,10 +182,7 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
       typing.value = event.data()?['typing'] == true;
     });
 
-    usersCol
-        .doc(receiver)
-        .snapshots()
-        .listen((event) {
+    usersCol.doc(receiver).snapshots().listen((event) {
       online.value = event.data()?['online'] == true;
     });
   }
@@ -178,38 +192,39 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
     return Scaffold(
       backgroundColor: Colors.grey[200],
       appBar: AppBar(
-          title: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundImage: NetworkImage(widget.user['picture']),
-          ),
-          SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.user['name']),
-              Obx(() {
-                if (typing.isTrue) {
-                  return Text(
-                    'Typing...',
-                    style:
-                        TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
-                  );
-                } else {
-                  return Obx(() {
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundImage: NetworkImage(widget.user['picture']),
+            ),
+            SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.user['name']),
+                Obx(() {
+                  if (typing.isTrue) {
                     return Text(
-                      online.value ? 'Online' : 'Offline',
-                      style:
-                      TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+                      'Typing...',
+                      style: TextStyle(
+                          fontWeight: FontWeight.normal, fontSize: 12),
                     );
-                  });
-                }
-              })
-            ],
-          )
-        ],
-      )),
+                  } else {
+                    return Obx(() {
+                      return Text(
+                        online.value ? 'Online' : 'Offline',
+                        style: TextStyle(
+                            fontWeight: FontWeight.normal, fontSize: 12),
+                      );
+                    });
+                  }
+                })
+              ],
+            )
+          ],
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -253,14 +268,21 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
                                   ? Colors.blue
                                   : Colors.white,
                               borderRadius: BorderRadius.circular(8)),
-                          child: Text(
-                            message['message'],
-                            style: TextStyle(
-                                fontSize: 16,
-                                color: message['sender'] ==
-                                        FirebaseAuth.instance.currentUser!.uid
-                                    ? Colors.white
-                                    : Colors.black),
+                          child: Column(
+                            children: [
+                              if (message['image'] != null)
+                                Image.network(message['image'], width: 200),
+                              Text(
+                                message['message'],
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    color: message['sender'] ==
+                                            FirebaseAuth
+                                                .instance.currentUser!.uid
+                                        ? Colors.white
+                                        : Colors.black),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -272,25 +294,52 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
           ),
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: const EdgeInsets.fromLTRB(4, 8, 24, 24),
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    onChanged: (val) {
-                      updateTyping();
-                    },
-                    decoration: InputDecoration(hintText: 'Enter messages'),
-                  ),
-                ),
-                SizedBox(width: 20),
-                FloatingActionButton(
-                  onPressed: sendMessage,
-                  mini: true,
-                  elevation: 0,
-                  child: Icon(Icons.send),
+                Obx(() {
+                  if (image.value != null) {
+                    return Stack(
+                      children: [
+                        Image.file(File(image.value!.path), height: 120),
+                        IconButton(onPressed: () {
+                          image.value = null;
+                        }, icon: Icon(Icons.clear)),
+                      ],
+                    );
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                }),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    IconButton(
+                        onPressed: () {
+                          ImagePicker()
+                              .pickImage(source: ImageSource.gallery)
+                              .then((XFile? value) {
+                            image.value = value;
+                          });
+                        },
+                        icon: Icon(Icons.image)),
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        onChanged: (val) {
+                          updateTyping();
+                        },
+                        decoration: InputDecoration(hintText: 'Enter messages'),
+                      ),
+                    ),
+                    SizedBox(width: 20),
+                    FloatingActionButton(
+                      onPressed: () => sendMessage(image.value, controller.text),
+                      mini: true,
+                      elevation: 0,
+                      child: Icon(Icons.send),
+                    ),
+                  ],
                 ),
               ],
             ),
