@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:timer/conversation_screen.dart';
+
+
+import 'conversation_screen.dart';
 
 class FindScreen extends StatefulWidget {
   const FindScreen({Key? key}) : super(key: key);
@@ -46,10 +48,19 @@ class _FindScreenState extends State<FindScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Find Users')),
+      appBar: AppBar(
+        title: Text('Find your freinds'),
+        backgroundColor: Colors.pink,
+        centerTitle: true,
+        actions: [
+          Icon(Icons.search),
+          Icon(Icons.more_vert),
+
+        ],
+      ),
       body: Obx(() {
         if (users.isEmpty) {
-          return Center(child: CircularProgressIndicator());
+          return Center(child: Text("No Freinds Yet"));
         } else {
           return ListView.builder(
             itemCount: users.length,

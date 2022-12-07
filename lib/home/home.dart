@@ -6,8 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:timer/conversation_screen.dart';
-import 'package:timer/find_screen.dart';
+import 'package:SomChat/conversation_screen.dart';
+import 'package:SomChat/find_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -34,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final user = await usersCol.doc(doc.id).get();
         chats.add({
           'id': doc.id,
+          'Bio': user.data()?['Bio'],
           'name': user.data()?['name'] ?? 'Null',
           'picture': await FirebaseStorage.instance.ref('users').child(doc.id).getDownloadURL(),
           'lastMessage': doc.data()['lastMessage']
@@ -43,19 +44,29 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('ChatApp')),
+      appBar: AppBar(
+          backgroundColor: Colors.pink,
+          centerTitle: true,
+          title: Text('Som Chat')),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Get.to(FindScreen());
         },
-        child: Icon(Icons.add),
+        backgroundColor: Colors.pink,
+
+        child: Icon(Icons.add_circle),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.
+      miniCenterFloat,
       body: Obx(() {
         if (loading.isTrue) {
-          return Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator(
+            color: Colors.pink,
+          ));
         } else {
           return _buildList();
         }
@@ -82,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Get.to(ConversationScreen(user: chat)),
               title: Text(chat['name']),
               subtitle: Text(lastMessage['message']),
-              trailing: Text(lastMessage['date'].toDate().toString()),
+              // trailing: Text(lastMessage['date'].toDate().toString()),
             );
           },
         );

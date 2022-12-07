@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:timer/auth/request_screen.dart';
+import 'package:SomChat/auth/request_screen.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({Key? key}) : super(key: key);
@@ -12,16 +12,42 @@ class WelcomePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Welcome To Chatapp', style: TextStyle(
-              fontSize: 32
-            ),),
-            SizedBox(height: 32),
-            ElevatedButton(
+            Spacer(),
+            Image.asset(
+              'assets/images/logo.png',
+
+            ),
+
+Spacer(),
+            const Text(
+              'Welcome to Som Chat App',
+              style: TextStyle(fontSize: 24),
+            ),
+         Spacer(),
+            MaterialButton(
               onPressed: () {
                 Get.to(RequestScreen());
               },
-              child: Text('Get Started'),
-            )
+              shape: RoundedRectangleBorder(borderRadius:
+              BorderRadius.circular(20)),
+              padding: EdgeInsets.symmetric(vertical: 20),
+              color: Colors.blue,
+              minWidth: 250,
+
+              child:
+
+              Text(
+                'Get Start',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+
+            ),
+            SizedBox(height: 28),
+
           ],
         ),
       ),
