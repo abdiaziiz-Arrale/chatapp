@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:SomChat/conversation_screen.dart';
@@ -47,7 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = 0.obs;
     return Scaffold(
+
       appBar: AppBar(
           backgroundColor: Colors.pink,
           centerTitle: true,
@@ -70,6 +73,28 @@ class _HomeScreenState extends State<HomeScreen> {
         } else {
           return _buildList();
         }
+      }),
+      bottomNavigationBar: Obx(() {
+        return BottomNavigationBar(
+          onTap: (index) {
+            currentIndex.value = index;
+          },
+          currentIndex: currentIndex.value,
+          type: BottomNavigationBarType.fixed,
+
+          iconSize: 24,
+          showUnselectedLabels: false,
+          showSelectedLabels: false,
+          selectedItemColor: Color.fromARGB(255, 10, 126, 164),
+          unselectedItemColor: Colors.black54,
+          items: [
+            BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.house_fill), label: "Home"),
+
+            BottomNavigationBarItem(
+                icon: Icon(Icons.account_circle_sharp), label: "Account"),
+          ],
+        );
       }),
     );
   }
@@ -99,5 +124,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     });
+
   }
 }

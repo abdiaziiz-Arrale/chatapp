@@ -149,13 +149,17 @@ class _ConversationScreenState extends State<ConversationScreen>
     usersCol.doc(receiverUid).collection('chats').doc(senderUid).snapshots().listen((event) {
       if(event.data()?['block']== false){
         print("your blocked");
+        final receiverChatsCol = usersCol.doc(receiverUid).collection('chats');
+        final receiverMessageDoc = receiverChatsCol.doc(senderUid);
+
+         receiverMessageDoc.set({'lastMessage': message});
+         receiverMessageDoc.collection('messages').doc(messageId).set(message);
+      }
+      else{
+        return;
       }
     });
-    final receiverChatsCol = usersCol.doc(receiverUid).collection('chats');
-    final receiverMessageDoc = receiverChatsCol.doc(senderUid);
 
-    await receiverMessageDoc.set({'lastMessage': message});
-    await receiverMessageDoc.collection('messages').doc(messageId).set(message);
   }
 
   @override
